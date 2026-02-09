@@ -18,6 +18,14 @@ from alpaca.common.exceptions import APIError
 
 STATE_PATH = Path(__file__).resolve().parents[1] / "state.json"
 
+# Dictionary (hash map) that models a few long-term companies we care about.
+# This is used when printing rankings so we can show human-readable names/sectors.
+COMPANIES: Dict[str, Dict[str, str]] = {
+    "PFE": {"name": "Pfizer Inc.", "sector": "Healthcare"},
+    "T": {"name": "AT&T Inc.", "sector": "Telecommunications"},
+    "AAPL": {"name": "Apple Inc.", "sector": "Technology"},
+}
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -219,8 +227,12 @@ def run_once() -> None:
 
     print("Ranked symbols (best first):")
     for sym, trend, short_avg, long_avg, latest in ranked:
+        info = COMPANIES.get(sym, {})
+        name = info.get("name", "Unknown")
+        sector = info.get("sector", "Unknown")
         print(
-            f"- {sym}: trend={trend:.4f} (short={short_avg:.2f}, long={long_avg:.2f}, last={latest:.2f})"
+            f"- {sym} ({name}, {sector}): "
+            f"trend={trend:.4f} (short={short_avg:.2f}, long={long_avg:.2f}, last={latest:.2f})"
         )
 
     # SELL RULE: sell all positions where short < long (long-term decline)
