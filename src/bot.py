@@ -17,6 +17,7 @@ from alpaca.common.exceptions import APIError
 
 
 STATE_PATH = Path(__file__).resolve().parents[1] / "state.json"
+VERSION = "1.1"
 
 # Dictionary (hash map) that models a few long-term companies we care about.
 # This is used when printing rankings so we can show human-readable names/sectors.
@@ -219,7 +220,7 @@ def run_once() -> None:
     cash = float(account.cash)
     account_id = account.id
     mode = "PAPER" if settings.paper else "LIVE"
-    print(f"Using {mode} account | ID: {account_id} | Cash: ${cash:,.2f}")
+    print(f"Stock Bot v{VERSION} | {mode} | Cash: ${cash:,.2f}")
 
     ranked = rank_symbols(
         data_client=data_client,
