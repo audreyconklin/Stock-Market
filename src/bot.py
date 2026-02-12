@@ -81,11 +81,10 @@ def load_settings() -> Settings:
 
 def load_state() -> Dict:
     if not STATE_PATH.exists():
-        return {
-            "cash": None,  # filled on first run
-            "last_trade_day": {},  # symbol -> YYYY-MM-DD
-        }
-    return json.loads(STATE_PATH.read_text(encoding="utf-8"))
+        return {"last_trade_day": {}}
+    data = json.loads(STATE_PATH.read_text(encoding="utf-8"))
+    # Only keep last_trade_day; cash comes from Alpaca
+    return {"last_trade_day": data.get("last_trade_day", {})}
 
 
 def save_state(state: Dict) -> None:
@@ -209,13 +208,18 @@ def rank_symbols(
 def run_once() -> None:
     settings = load_settings()
     state = load_state()
-    if state.get("cash") is None:
-        state["cash"] = settings.cash_start
 
     today = datetime.now(timezone.utc)
 
     trading_client = TradingClient(settings.api_key, settings.api_secret, paper=settings.paper)
     data_client = StockHistoricalDataClient(settings.api_key, settings.api_secret)
+
+    # Use actual Alpaca account (ensures correct paper account with 1M cash)
+    account = trading_client.get_account()
+    cash = float(account.cash)
+    account_id = account.id
+    mode = "PAPER" if settings.paper else "LIVE"
+    print(f"Using {mode} account | ID: {account_id} | Cash: ${cash:,.2f}")
 
     ranked = rank_symbols(
         data_client=data_client,
@@ -235,6 +239,16 @@ def run_once() -> None:
             f"trend={trend:.4f} (short={short_avg:.2f}, long={long_avg:.2f}, last={latest:.2f})"
         )
 
+    # Market must be open for orders to fill (9:30 AM - 4:00 PM ET, Mon-Fri)
+    clock = trading_client.get_clock()
+    if not clock.is_open:
+        next_open = clock.next_open
+        print(f"\n*** MARKET CLOSED *** Orders won't fill. Run during 9:30 AM - 4 PM ET (Mon-Fri).")
+        if next_open:
+            print(f"    Next open: {next_open.strftime('%a %b %d, %I:%M %p')} ET")
+        save_state(state)
+        return
+
     # SELL RULE: sell all positions where short < long (long-term decline)
     for sym, _, short_avg, long_avg, latest in ranked:
         qty = current_position_qty(trading_client, sym)
@@ -243,35 +257,35 @@ def run_once() -> None:
         if short_avg < long_avg:
             market_sell(trading_client, sym, qty)
             proceeds = qty * latest
-            state["cash"] = float(state["cash"]) + proceeds
+            cash += proceeds
             state["last_trade_day"][sym] = _format_day(today)
             print(f"sell {sym} qty={qty} est_proceeds={proceeds:.2f}")
 
-    # BUY RULE: buy the top symbol if trending up and cooldown passed and limits allow
-    best_sym, best_trend, _, _, best_price = ranked[0]
-    waited = days_since(state["last_trade_day"].get(best_sym), today)
-    best_qty = current_position_qty(trading_client, best_sym)
+    # BUY RULE: buy ALL symbols with positive trend, cooldown passed, and limits allow
+    for sym, trend, _, _, price in ranked:
+        if trend <= 0:
+            continue
+        waited = days_since(state["last_trade_day"].get(sym), today)
+        qty = current_position_qty(trading_client, sym)
+        cost = settings.shares_per_trade * price
+        can_afford = cash >= cost
+        under_max = qty + settings.shares_per_trade <= settings.max_shares
 
-    can_afford = float(state["cash"]) >= best_price * settings.shares_per_trade
-    under_max = best_qty + settings.shares_per_trade <= settings.max_shares
-
-    if best_trend > 0 and waited >= settings.wait_days and under_max and can_afford:
-        market_buy(trading_client, best_sym, settings.shares_per_trade)
-        cost = settings.shares_per_trade * best_price
-        state["cash"] = float(state["cash"]) - cost
-        state["last_trade_day"][best_sym] = _format_day(today)
-        print(f"buy {best_sym} qty={settings.shares_per_trade} est_cost={cost:.2f}")
-    else:
-        print(
-            "no buy:",
-            f"trend>0={best_trend>0}",
-            f"waited={waited} (need {settings.wait_days})",
-            f"under_max={under_max} (pos={best_qty}, max={settings.max_shares})",
-            f"can_afford={can_afford} (cash={float(state['cash']):.2f}, need={best_price*settings.shares_per_trade:.2f})",
-        )
+        if waited >= settings.wait_days and under_max and can_afford:
+            market_buy(trading_client, sym, settings.shares_per_trade)
+            cash -= cost
+            state["last_trade_day"][sym] = _format_day(today)
+            print(f"buy {sym} qty={settings.shares_per_trade} est_cost={cost:.2f}")
+        else:
+            print(
+                f"no buy {sym}:",
+                f"waited={waited} (need {settings.wait_days})",
+                f"under_max={under_max} (pos={qty})",
+                f"can_afford={can_afford} (cash={cash:,.2f})",
+            )
 
     print("\nState summary:")
-    print(f"- cash (simulated) = {float(state['cash']):.2f}")
+    print(f"- account cash = ${cash:,.2f}")
     print(f"- last_trade_day = {state['last_trade_day']}")
 
     save_state(state)

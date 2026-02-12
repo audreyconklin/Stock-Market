@@ -1,6 +1,6 @@
 {
   // Pin the interpreter for this project so VS Code stops prompting.
-  "python.defaultInterpreterPath": "c:\\\\Users\\\\S1790589\\\\AppData\\\\Local\\\\Python\\\\pythoncore-3.14-64\\\\python.exe",
+  "python.defaultInterpreterPath": "C:\\Users\\scott\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
 
   // Optional: reduce Python extension terminal noise.
   "python.terminal.activateEnvironment": false,

@@ -1,27 +1,25 @@
 # Stock Market Bot (Alpaca Paper Trading)
 
-Implements a simple long-term trend strategy:
-- Rank symbols by \(SMA_{short} - SMA_{long}\)
-- Buy the top-ranked symbol when trend is positive and cooldown has passed
-- Sell holdings when short SMA drops below long SMA
+Long-term SMA trend strategy:
+- Rank symbols by short SMA − long SMA
+- Buy top symbol when trend is positive and cooldown passed
+- Sell when short SMA drops below long SMA
 
 ## Setup
 
-1) Create a virtualenv (optional) and install deps:
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-```bash
-pip install -r requirements.txt
-```
+2. Create `.env` from the example (do not commit `.env`):
+   ```bash
+   copy .env.example .env
+   ```
 
-2) Create a `.env` file (DO NOT commit it). Copy from `.env.example`:
-
-```bash
-copy .env.example .env
-```
-
-Then set:
-- `ALPACA_API_KEY`
-- `ALPACA_API_SECRET`
+3. Set your Alpaca credentials in `.env`:
+   - `ALPACA_API_KEY`
+   - `ALPACA_API_SECRET`
 
 ## Run
 
@@ -29,21 +27,34 @@ Then set:
 python main.py
 ```
 
-## Diagnose 401 Unauthorized
+## Configuration
 
-If you see `401 Authorization Required / Unauthorized`, your `.env` is loading but Alpaca is rejecting the credentials.
-Run:
+Optional `.env` variables:
 
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WATCHLIST` | PFE,T,AAPL | Comma-separated symbols |
+| `CASH_START` | 10000 | Starting cash (paper only) |
+| `ALPACA_DATA_FEED` | iex | Use `iex` for free data feed |
+| `SHORT_WINDOW` | 50 | Short SMA window (days) |
+| `LONG_WINDOW` | 200 | Long SMA window (days) |
+| `WAIT_DAYS` | 5 | Cooldown between buys |
+| `SHARES_PER_TRADE` | 50 | Shares per buy order |
+| `MAX_SHARES` | 300 | Max shares per symbol |
+
+## Troubleshooting
+
+**401 Unauthorized** — Credentials invalid. Run:
 ```bash
 python scripts/diagnose_alpaca.py
 ```
 
-## Diagnose 403 "recent SIP data"
-
-If you see `subscription does not permit querying recent SIP data`, set:
-- `ALPACA_DATA_FEED=iex` (free feed; recommended)
+**403 "recent SIP data"** — Add to `.env`:
+```
+ALPACA_DATA_FEED=iex
+```
 
 ## Notes
 
-- Secrets are loaded from environment variables (see `.env.example`) and `.env` is ignored by git.
-- The bot saves `state.json` to remember last trade day between runs (also ignored by git).
+- Secrets load from `.env` (gitignored).
+- Bot saves `state.json` for trade cooldown (gitignored).
