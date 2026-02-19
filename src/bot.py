@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Tuple
 from dotenv import load_dotenv
 
 from alpaca.data.historical.stock import StockHistoricalDataClient
+from src.bst import BST
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.client import TradingClient
@@ -193,7 +194,8 @@ def rank_symbols(
     long_window: int,
     feed: str,
 ) -> List[Tuple[str, float, float, float, float]]:
-    ranked = []
+    # Use a BST ordered by trend (score) so we can retrieve top stocks efficiently.
+    bst = BST()
     for sym in symbols:
         closes_long = get_last_n_closes(data_client, sym, long_window, feed=feed)
         closes_short = closes_long[-short_window:]
@@ -201,9 +203,10 @@ def rank_symbols(
         long_avg = sma(closes_long)
         trend = short_avg - long_avg
         latest = closes_long[-1]
-        ranked.append((sym, trend, short_avg, long_avg, latest))
-    ranked.sort(key=lambda x: x[1], reverse=True)
-    return ranked
+        # Insert into BST: key = trend (for ordering), value = full tuple
+        bst.insert(key=trend, value=(sym, trend, short_avg, long_avg, latest))
+    # Retrieval: reverse inorder gives best (highest trend) first
+    return bst.get_ranked_descending()
 
 
 def run_once() -> None:
